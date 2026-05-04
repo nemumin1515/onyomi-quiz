@@ -849,6 +849,7 @@ function renderSettingsPage(){
           📂 バックアップから復元
           <input type="file" accept=".json" style="display:none" onchange="restoreData(event)">
         </label>
+        <div id="restore-confirm-box" style="display:none;margin-top:8px;padding:10px;background:#fff3f3;border:1px solid #f5c4b3;border-radius:8px"></div>
         <div style="font-size:11px;color:#aaa;line-height:1.6">※ バックアップにはポイント・学習記録・重点漢字が含まれます。<br>※ 復元すると現在のデータは上書きされます。</div>
       </div>
     </div>
@@ -1084,24 +1085,55 @@ window.backupData = function(){
 
 window.restoreData = function(event){
   const file = event.target.files[0]; if(!file) return;
-  if(!confirm('現在のデータを上書きして復元しますか？')) { event.target.value=''; return; }
   const reader = new FileReader();
   reader.onload = function(e){
+    let data;
     try {
-      const data = JSON.parse(e.target.result);
+      data = JSON.parse(e.target.result);
       if(data.version !== 1) throw new Error('形式が異なります');
-      if(typeof data.points === 'number') { totalPoints = data.points; savePoints(totalPoints); }
-      if(Array.isArray(data.records)) saveRecords(data.records);
-      if(Array.isArray(data.focus)) { focusKanji = data.focus; saveFocusToStorage(focusKanji); }
-      alert('復元が完了しました。');
-      renderSettingsPage();
     } catch(err) {
-      alert('復元に失敗しました。正しいバックアップファイルか確認してください。');
+      showRestoreMsg('❌ 復元に失敗しました。正しいバックアップファイルか確認してください。', 'error');
+      event.target.value = ''; return;
     }
+    const box = document.getElementById('restore-confirm-box');
+    if(!box) { event.target.value=''; return; }
+    box.style.display = 'block';
+    box.innerHTML = `
+      <div style="font-size:13px;color:#c0392b;margin-bottom:8px">⚠️ 現在のデータを上書きします。よろしいですか？</div>
+      <div style="display:flex;gap:8px">
+        <button onclick="doRestore()" style="flex:1;padding:8px;background:#1D9E75;color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">復元する</button>
+        <button onclick="cancelRestore()" style="flex:1;padding:8px;background:#eee;color:#555;border:none;border-radius:8px;font-size:13px;cursor:pointer">キャンセル</button>
+      </div>`;
+    window._pendingRestoreData = data;
     event.target.value = '';
   };
   reader.readAsText(file);
 };
+
+window.doRestore = function(){
+  const data = window._pendingRestoreData; if(!data) return;
+  if(typeof data.points === 'number') { totalPoints = data.points; savePoints(totalPoints); }
+  if(Array.isArray(data.records)) saveRecords(data.records);
+  if(Array.isArray(data.focus)) { focusKanji = data.focus; saveFocusToStorage(focusKanji); }
+  window._pendingRestoreData = null;
+  showRestoreMsg('✅ 復元が完了しました。', 'success');
+  renderSettingsPage();
+};
+
+window.cancelRestore = function(){
+  window._pendingRestoreData = null;
+  const box = document.getElementById('restore-confirm-box');
+  if(box) box.style.display = 'none';
+};
+
+function showRestoreMsg(msg, type){
+  const box = document.getElementById('restore-confirm-box');
+  if(!box) return;
+  box.style.display = 'block';
+  const color = type === 'success' ? '#1D9E75' : '#c0392b';
+  box.innerHTML = `<div style="font-size:13px;color:${color};text-align:center">${msg}</div>`;
+  setTimeout(()=>{ box.style.display='none'; }, 3000);
+}
 
 window.resetPoints = function(){
   if(!confirm('⚠️ ポイントをリセットします。この操作は元に戻せません。本当によろしいですか？')) return;
