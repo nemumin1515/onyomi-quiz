@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>音読みクイズ</title>
+<title>音読みクイズ v2</title>
 <link rel="manifest" href="./manifest.json">
 <meta name="theme-color" content="#1D9E75">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -51,6 +51,11 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Hiragino San
 .focus-clear-btn{display:block;width:100%;padding:8px;border:1.5px solid #f5c4b3;border-radius:10px;background:#fff8f5;color:#c0392b;font-size:13px;font-weight:600;cursor:pointer;text-align:center;-webkit-tap-highlight-color:transparent;margin-top:4px}
 .focus-clear-btn:active{opacity:0.7}
 .focus-clear-btn:disabled{border-color:#e0e0e0;background:#fafafa;color:#ccc;cursor:default}
+.focus-control-row{display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap}
+.focus-control-row .focus-clear-btn{flex:1 1 170px;margin-top:0}
+.focus-ratio-mini{display:flex;gap:4px;flex:0 0 auto;align-items:center}
+.focus-ratio-mini .count-btn{flex:0 0 auto;padding:7px 9px;font-size:12px;border-radius:9px;white-space:nowrap;min-width:44px}
+.focus-ratio-mini .count-btn:disabled{border-color:#e0e0e0;background:#fafafa;color:#ccc;cursor:default}
 .reading-card{background:#fff;border:1px solid #e8e8e8;border-radius:16px;padding:24px 16px;text-align:center;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06)}
 .reading-label{font-size:12px;color:#999;margin-bottom:10px}
 .reading-text{font-size:52px;font-weight:600;color:#1a1a1a;letter-spacing:6px}
@@ -343,77 +348,288 @@ function countByGrade(g){
 }
 
 // ---- 問題生成 ----
-function buildNormalQuestion(pool){
-  // pool内の音読みインデックス（pool限定）を構築
-  const poolReadingIdx={};
+// ---- 問題生成 ----
+const PANEL_SIZE = 6;
+
+function uniqueIdxs(idxs){
+  const seen = new Set();
+  const out = [];
+  for(const i of idxs){
+    if(i === undefined || i < 0) continue;
+    const k = db[i].k;
+    if(seen.has(k)) continue;
+    seen.add(k);
+    out.push(i);
+  }
+  return out;
+}
+
+function getMaxSameReadingPerSession(n){
+  // 「20%以上を同じ読みにしない」ため、10問なら最大2問。
+  // 5問以下でも重点漢字を出せるよう、最低1問は許可する。
+  return Math.max(1, Math.floor(n * 0.2));
+}
+
+function addReadingUse(map, reading){
+  map[reading] = (map[reading] || 0) + 1;
+}
+
+function canUseReading(map, reading){
+  return (map[reading] || 0) < getMaxSameReadingPerSession(targetCount);
+}
+
+function buildPoolReadingIdx(pool){
+  const poolReadingIdx = {};
   for(const i of pool){
     for(const r of db[i].r){
-      if(!poolReadingIdx[r]) poolReadingIdx[r]=[];
+      if(!poolReadingIdx[r]) poolReadingIdx[r] = [];
       poolReadingIdx[r].push(i);
     }
   }
-  // 正解が2枚以上になる音読みのみ候補にする
-  const validReadings=Object.keys(poolReadingIdx).filter(r=>poolReadingIdx[r].length>=2);
-  if(!validReadings.length) return null;
+  for(const r of Object.keys(poolReadingIdx)){
+    poolReadingIdx[r] = uniqueIdxs(poolReadingIdx[r]);
+  }
+  return poolReadingIdx;
+}
 
-  // 試行: 音読みを先に選び、正解漢字を多め(2〜6)に選択肢へ入れる
-  for(let attempt=0;attempt<100;attempt++){
-    const reading=validReadings[rand(validReadings.length)];
-    const correctPool=poolReadingIdx[reading]; // この読みを持つ漢字インデックス
-    // 正解を最大6枚（ただし残りスロットも確保するため最大4枚）からランダムに選ぶ
-    const maxCorrect=Math.min(correctPool.length, 6);
-    const numCorrect=2+rand(maxCorrect-1); // 2〜maxCorrect枚
-    const chosenCorrect=shuffle([...correctPool]).slice(0,numCorrect);
-    // 残りをその読みを持たない漢字で埋める
-    const wrongPool=pool.filter(i=>!db[i].r.includes(reading));
-    if(wrongPool.length<6-numCorrect) continue;
-    const chosenWrong=shuffle(wrongPool).slice(0,6-numCorrect);
-    const choices=shuffle([...chosenCorrect,...chosenWrong]).map(i=>db[i]);
-    const correctSet=new Set(chosenCorrect.map(i=>db[i].k));
-    return{reading,correctSet,choices:choices.map(e=>e.k)};
+function buildNormalQuestion(pool, readingUse = {}){
+  // 通常問題：出題範囲内で同じ読みの漢字をすべて正解に含める。
+  const poolReadingIdx = buildPoolReadingIdx(pool);
+
+  // 正解が1個だけの読みは通常問題では出さない。
+  const validReadings = shuffle(Object.keys(poolReadingIdx).filter(r =>
+    poolReadingIdx[r].length >= 2 && canUseReading(readingUse, r)
+  ));
+
+  for(const reading of validReadings){
+    const correctPool = poolReadingIdx[reading];
+
+    // 正解が6個を超える場合は、表示できる6個だけランダムに選ぶ。
+    const chosenCorrect = correctPool.length > PANEL_SIZE
+      ? shuffle(correctPool).slice(0, PANEL_SIZE)
+      : [...correctPool];
+
+    // 正解が6個未満なら、残りを「その読みを持たない漢字」で埋める。
+    const wrongNeeded = PANEL_SIZE - chosenCorrect.length;
+    const correctKeys = new Set(chosenCorrect.map(i => db[i].k));
+    const wrongPool = pool.filter(i =>
+      !correctKeys.has(db[i].k) && !db[i].r.includes(reading)
+    );
+
+    if(wrongPool.length < wrongNeeded) continue;
+
+    const chosenWrong = shuffle(wrongPool).slice(0, wrongNeeded);
+    const choices = shuffle([...chosenCorrect, ...chosenWrong]).map(i => db[i]);
+    const correctSet = new Set(chosenCorrect.map(i => db[i].k));
+
+    return { reading, correctSet, choices: choices.map(e => e.k) };
   }
   return null;
 }
 
-function buildFocusQuestion(focusK,pool){
-  const entry=db.find(e=>e.k===focusK);
-  if(!entry||!entry.r.length) return null;
-  // フィルター範囲内の漢字が持つ音読みセットを取得
-  const filteredReadings=new Set(pool.flatMap(i=>db[i].r));
-  // 重点漢字の音読みのうち、フィルター範囲内で出題されている読みを優先
-  const preferredR=entry.r.filter(r=>filteredReadings.has(r));
-  const candidateR=preferredR.length>0?preferredR:entry.r;
-  const reading=candidateR[rand(candidateR.length)];
-  const sameReading=shuffle(pool.filter(i=>db[i].k!==focusK&&db[i].r.includes(reading)));
-  // 同じ読みの漢字を最大2枚まで採用（存在すれば必ず含める）
-  const sameSlots=sameReading.slice(0,Math.min(sameReading.length,2));
-  const usedKeys=new Set([focusK,...sameSlots.map(i=>db[i].k)]);
-  const rest=shuffle(pool.filter(i=>!usedKeys.has(db[i].k))).slice(0,5-sameSlots.length);
-  // フォールバックもpoolの範囲内のみ（フィルター外の学年を混入させない）
-  if(sameSlots.length+rest.length<5) return null;
-  const choices=shuffle([entry,...sameSlots.map(i=>db[i]),...rest.map(i=>db[i])]);
-  const correctSet=new Set(choices.filter(e=>e.r.includes(reading)).map(e=>e.k));
-  return{reading,correctSet,choices:choices.map(e=>e.k)};
+function buildFocusQuestion(focusK, pool){
+  // 関数名は変更しない。
+  // 文字1つでも、{reading, focusIdxs} のグループ形式でも受け取れるようにする。
+  let reading;
+  let focusIdxs;
+
+  if(typeof focusK === 'object' && focusK !== null && focusK.reading && Array.isArray(focusK.focusIdxs)){
+    reading = focusK.reading;
+    focusIdxs = uniqueIdxs(focusK.focusIdxs).filter(i => db[i].r.includes(reading));
+  }else{
+    const entryIdx = db.findIndex(e => e.k === focusK);
+    if(entryIdx < 0 || !db[entryIdx].r.length) return null;
+
+    const filteredReadings = new Set(pool.flatMap(i => db[i].r));
+    const preferredR = db[entryIdx].r.filter(r => filteredReadings.has(r));
+    const candidateR = preferredR.length > 0 ? preferredR : db[entryIdx].r;
+
+    reading = candidateR[rand(candidateR.length)];
+    focusIdxs = [entryIdx];
+  }
+
+  if(!reading || !focusIdxs.length) return null;
+
+  // 重点漢字を最優先でパネルに入れる。
+  const chosenFocus = focusIdxs.slice(0, PANEL_SIZE);
+  const focusKeys = new Set(chosenFocus.map(i => db[i].k));
+
+  // 出題範囲内の同じ読みを追加。ただし重点漢字を優先し、残り枠だけ採用。
+  const sameReadingPool = pool.filter(i =>
+    !focusKeys.has(db[i].k) && db[i].r.includes(reading)
+  );
+  const sameSlots = shuffle(sameReadingPool).slice(0, PANEL_SIZE - chosenFocus.length);
+
+  const usedKeys = new Set([...focusKeys, ...sameSlots.map(i => db[i].k)]);
+
+  // 残りは不正解、つまり「この読みを持たない漢字」で埋める。
+  const wrongNeeded = PANEL_SIZE - chosenFocus.length - sameSlots.length;
+  const wrongPool = pool.filter(i =>
+    !usedKeys.has(db[i].k) && !db[i].r.includes(reading)
+  );
+
+  if(wrongPool.length < wrongNeeded) return null;
+
+  const wrongSlots = shuffle(wrongPool).slice(0, wrongNeeded);
+  const choices = shuffle([...chosenFocus, ...sameSlots, ...wrongSlots]).map(i => db[i]);
+
+  // 表示されたパネルの中で、指定の読みを持つ漢字を正解にする。
+  const correctSet = new Set(
+    choices.filter(e => e.r.includes(reading)).map(e => e.k)
+  );
+
+  return { reading, correctSet, choices: choices.map(e => e.k) };
+}
+
+function buildFocusGroups(pool, maxFocusQuestions){
+  if(maxFocusQuestions <= 0) return [];
+
+  const focusIdxs = uniqueIdxs(
+    focusKanji.map(k => db.findIndex(e => e.k === k && e.r.length > 0))
+  );
+  if(!focusIdxs.length) return [];
+
+  const poolReadings = new Set(pool.flatMap(i => db[i].r));
+  const byReading = {};
+
+  for(const idx of focusIdxs){
+    for(const r of db[idx].r){
+      if(!byReading[r]) byReading[r] = [];
+      byReading[r].push(idx);
+    }
+  }
+
+  for(const r of Object.keys(byReading)){
+    byReading[r] = uniqueIdxs(byReading[r]);
+  }
+
+  const groups = [];
+  const usedFocus = new Set();
+  const readingUse = {};
+  const maxSameReading = getMaxSameReadingPerSession(targetCount);
+
+  // 同じ読みの重点漢字をできるだけ1問にまとめる。
+  // 例：コウの重点漢字が10個なら、6個 + 4個の2問に分ける。
+  while(groups.length < maxFocusQuestions && usedFocus.size < focusIdxs.length){
+    let best = null;
+
+    for(const reading of Object.keys(byReading)){
+      const remaining = byReading[reading].filter(i => !usedFocus.has(i));
+      if(!remaining.length) continue;
+
+      const slotsLeftForReading = maxSameReading - (readingUse[reading] || 0);
+      if(slotsLeftForReading <= 0) continue;
+
+      // まだ未使用の重点漢字を最も多く含む読みを優先する。
+      const score = remaining.length * 100 + (poolReadings.has(reading) ? 1 : 0);
+      if(!best || score > best.score){
+        best = { reading, focusIdxs: remaining, slotsLeftForReading, score };
+      }
+    }
+
+    if(!best) break;
+
+    const shuffledFocus = shuffle(best.focusIdxs);
+    const chunksAllowed = Math.min(
+      best.slotsLeftForReading,
+      maxFocusQuestions - groups.length,
+      Math.ceil(shuffledFocus.length / PANEL_SIZE)
+    );
+
+    for(let c = 0; c < chunksAllowed; c++){
+      const chunk = shuffledFocus.slice(c * PANEL_SIZE, (c + 1) * PANEL_SIZE);
+      if(!chunk.length) continue;
+
+      groups.push({ reading: best.reading, focusIdxs: chunk });
+      addReadingUse(readingUse, best.reading);
+      for(const idx of chunk) usedFocus.add(idx);
+    }
+  }
+
+  return shuffle(groups);
+}
+
+function readingCountMap(queue){
+  const m = {};
+  for(const q of queue){
+    if(!q || !q.reading) continue;
+    m[q.reading] = (m[q.reading] || 0) + 1;
+  }
+  return m;
+}
+
+function hardLimitQueueByReading(queue, pool){
+  // 最終安全装置：どの経路で作られた問題でも、同じ読みが20%を超えないようにする。
+  const maxSameReading = getMaxSameReadingPerSession(targetCount);
+  const readingUse = {};
+  const out = new Array(queue.length).fill(null);
+
+  for(let i = 0; i < queue.length; i++){
+    const q = queue[i];
+    if(!q || !q.reading || !q.choices || q.choices.length !== PANEL_SIZE) continue;
+    if((readingUse[q.reading] || 0) >= maxSameReading) continue;
+    out[i] = q;
+    addReadingUse(readingUse, q.reading);
+  }
+
+  for(let i = 0; i < out.length; i++){
+    if(out[i]) continue;
+    const q = buildNormalQuestion(pool, readingUse);
+    if(q && q.choices && q.choices.length === PANEL_SIZE){
+      out[i] = q;
+      addReadingUse(readingUse, q.reading);
+    }
+  }
+
+  // 開発確認用。ブラウザのF12→Consoleで出題読みの内訳を確認できる。
+  console.log('reading counts', readingCountMap(out));
+  return out;
 }
 
 function buildQuestionQueue(){
-  const fdb=getFilteredDb();
-  const pool=fdb.map(e=>db.findIndex(d=>d.k===e.k));
-  if(pool.length<6) return[];
-  const n=targetCount;
-  const queue=new Array(n).fill(null);
-  const validFocus=focusKanji.filter(k=>db.find(e=>e.k===k&&e.r.length>0));
-  const maxFocus = focusRatio==='none' ? 0 : focusRatio==='half' ? Math.floor(n/2) : n;
-  const useFocus=validFocus.length<=maxFocus?[...validFocus]:shuffle([...validFocus]).slice(0,maxFocus);
-  const slots=shuffle([...Array(n).keys()]);
-  const focusSlots=slots.slice(0,useFocus.length);
-  for(let i=0;i<useFocus.length;i++){
-    const q=buildFocusQuestion(useFocus[i],pool);
-    queue[focusSlots[i]]=q;
+  const fdb = getFilteredDb();
+  const pool = fdb.map(e => db.findIndex(d => d.k === e.k));
+  if(pool.length < PANEL_SIZE) return [];
+
+  const n = targetCount;
+  const queue = new Array(n).fill(null);
+  const readingUse = {};
+
+  const maxFocus = focusRatio === 'none'
+    ? 0
+    : focusRatio === 'half'
+      ? Math.floor(n / 2)
+      : n;
+
+  const focusGroups = buildFocusGroups(pool, maxFocus);
+  const slots = shuffle([...Array(n).keys()]);
+  let slotPos = 0;
+
+  // 重点漢字問題を先に配置する。
+  for(const group of focusGroups){
+    if(slotPos >= slots.length) break;
+    if(!canUseReading(readingUse, group.reading)) continue;
+
+    const q = buildFocusQuestion(group, pool);
+    if(!q || !q.choices || q.choices.length !== PANEL_SIZE) continue;
+
+    queue[slots[slotPos]] = q;
+    slotPos++;
+    addReadingUse(readingUse, q.reading);
   }
-  for(let i=0;i<n;i++) if(!queue[i]) queue[i]=buildNormalQuestion(pool);
-  for(let i=0;i<n;i++) if(!queue[i]) queue[i]=buildNormalQuestion(pool)||{reading:'?',correctSet:new Set(),choices:[]};
-  return queue;
+
+  // 残りを通常問題で埋める。通常問題も同じ読みが20%を超えないようにする。
+  for(let i = 0; i < n; i++){
+    if(queue[i]) continue;
+
+    const q = buildNormalQuestion(pool, readingUse);
+    if(q && q.choices && q.choices.length === PANEL_SIZE){
+      queue[i] = q;
+      addReadingUse(readingUse, q.reading);
+    }
+  }
+
+  return hardLimitQueueByReading(queue, pool);
 }
 
 // ---- スコア表示 ----
@@ -623,24 +839,6 @@ function renderSettingsPage(){
   const sa=document.getElementById('settings-area');
   sa.innerHTML=`
     <div class="section-card">
-      <div class="section-title">問題数</div>
-      <div class="count-row" id="count-row"></div>
-    </div>
-    <div class="section-card" id="focus-ratio-card">
-      <div class="section-title">重点漢字の出題数</div>
-      <div class="count-row" id="focus-ratio-row"></div>
-    </div>
-    <div class="section-card">
-      <div class="section-title">今週の重点漢字</div>
-      <div class="focus-input-row">
-        <input id="focus-input" class="focus-input" type="text" placeholder="例：学校生活…" maxlength="20" onkeydown="handleFocusKeydown(event)">
-        <button class="focus-add-btn" onclick="handleFocusAdd()">追加</button>
-      </div>
-      <div id="focus-warn" class="focus-warn"></div>
-      <div id="focus-tags" class="focus-tags"></div>
-      <button id="focus-clear-all" class="focus-clear-btn" onclick="clearAllFocus()" ${focusKanji.length===0?'disabled':''}>重点漢字をすべて削除</button>
-    </div>
-    <div class="section-card">
       <div class="section-title">データのバックアップ・復元</div>
       <div style="display:flex;flex-direction:column;gap:8px">
         <button class="focus-add-btn" style="width:100%;padding:10px;font-size:13px" onclick="backupData()">💾 バックアップをダウンロード</button>
@@ -654,6 +852,23 @@ function renderSettingsPage(){
     <div class="section-card">
       <div class="section-title">出題範囲（複数選択可）</div>
       <div class="filter-row" id="filter-row"></div>
+    </div>
+    <div class="section-card" id="focus-ratio-card">
+      <div class="section-title">今週の重点漢字 / 重点漢字の出題数</div>
+      <div class="focus-input-row">
+        <input id="focus-input" class="focus-input" type="text" placeholder="例：学校生活…" maxlength="20" onkeydown="handleFocusKeydown(event)">
+        <button class="focus-add-btn" onclick="handleFocusAdd()">追加</button>
+      </div>
+      <div id="focus-warn" class="focus-warn"></div>
+      <div id="focus-tags" class="focus-tags"></div>
+      <div class="focus-control-row">
+        <button id="focus-clear-all" class="focus-clear-btn" onclick="clearAllFocus()" ${focusKanji.length===0?'disabled':''}>重点漢字をすべて削除</button>
+        <div class="focus-ratio-mini" id="focus-ratio-row" aria-label="重点漢字の出題数"></div>
+      </div>
+    </div>
+    <div class="section-card">
+      <div class="section-title">問題数</div>
+      <div class="count-row" id="count-row"></div>
     </div>
     <div class="section-card">
       <div class="section-title">ポイント・称号</div>
@@ -672,15 +887,14 @@ function renderSettingsPage(){
 
 function renderFocusRatioBtns(){
   const row=document.getElementById('focus-ratio-row');if(!row)return;
-  // 重点漢字がなければカードをグレーアウト
-  const card=document.getElementById('focus-ratio-card');
-  if(card) card.style.opacity=focusKanji.length===0?'0.4':'1';
+  row.style.opacity=focusKanji.length===0?'0.45':'1';
   row.innerHTML='';
   const opts=[['all','全部'],['half','半分'],['none','なし']];
   for(const [val,label] of opts){
     const btn=document.createElement('button');
     btn.className='count-btn'+(focusRatio===val?' active':'');
     btn.textContent=label;
+    btn.disabled=focusKanji.length===0;
     btn.onclick=(v=>()=>{
       if(focusKanji.length===0) return; // 重点漢字がなければ無効
       focusRatio=v;
@@ -905,7 +1119,7 @@ function renderRankList(){
 }
 
 // ---- 起動 ----
-fetch('./OnyomiToKanji2022.json')
+fetch('./OnyomiToKanji2022.json?v=settings-v3')
   .then(r => r.json())
   .then(data => {
     Object.assign(globalThis, {_RAW: data});
