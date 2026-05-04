@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>音読みクイズ</title>
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#1D9E75">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="音読みクイズ">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;background:#f5f5f0}
+
+/* タブバー */
+.tab-bar{position:sticky;top:0;z-index:50;background:#fff;border-bottom:1px solid #e0e0e0;display:flex;justify-content:center}.tab-bar>*{flex:1;max-width:200px}
+.tab-btn{flex:1;padding:12px 4px;font-size:13px;font-weight:500;color:#aaa;background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:color .15s}
+.tab-btn.active{color:#1D9E75;border-bottom-color:#1D9E75;font-weight:700}
+
+/* ページ共通 */
+.page{display:none;max-width:600px;margin:0 auto;padding:16px;min-height:calc(100vh - 45px)}
+.page.active{display:block}
+
+/* ヘッダ */
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.title{font-size:16px;font-weight:600;color:#1a1a1a}
+.score{font-size:13px;color:#888}
+.progress-bar{height:4px;background:#e0e0e0;border-radius:2px;margin-bottom:18px;overflow:hidden}
+.progress-fill{height:100%;background:#1D9E75;border-radius:2px;transition:width 0.4s}
+.section-card{background:#fff;border:1px solid #e8e8e8;border-radius:14px;padding:14px;margin-bottom:14px}
+.section-title{font-size:12px;color:#999;margin-bottom:10px;letter-spacing:0.3px}
+.count-row{display:flex;gap:8px}
+.count-btn{flex:1;padding:10px 0;border:1.5px solid #d8d8d8;border-radius:10px;font-size:15px;font-weight:500;color:#666;background:#f9f9f9;cursor:pointer;text-align:center;transition:all .15s;-webkit-tap-highlight-color:transparent}
+.count-btn.active{border-color:#4A90D9;background:#e8f2fc;color:#1a4a9e;font-weight:700}
+.filter-row{display:flex;gap:5px;flex-wrap:wrap}
+.filter-btn{padding:6px 0;border:1.5px solid #d8d8d8;border-radius:20px;font-size:12px;color:#666;background:#f9f9f9;cursor:pointer;transition:all .15s;-webkit-tap-highlight-color:transparent;text-align:center;flex:1;min-width:36px}
+.filter-btn.active{border-color:#1D9E75;background:#e8f8f2;color:#0a6644;font-weight:700}
+.filter-count{font-size:10px;color:#bbb;display:block;margin-top:1px}
+.filter-btn.active .filter-count{color:#5cb891}
+.focus-input-row{display:flex;gap:8px;margin-bottom:10px}
+.focus-input{flex:1;padding:9px 12px;border:1.5px solid #d8d8d8;border-radius:10px;font-size:16px;color:#1a1a1a;background:#fafafa;outline:none;letter-spacing:2px}
+.focus-input:focus{border-color:#1D9E75;background:#fff}
+.focus-add-btn{padding:9px 16px;border:none;border-radius:10px;background:#1D9E75;color:#fff;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent}
+.focus-add-btn:active{opacity:0.8}
+.focus-tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.focus-tag{display:flex;align-items:center;gap:5px;background:#e8f8f2;border:1.5px solid #5DCAA5;border-radius:20px;padding:4px 10px 4px 12px;font-size:15px;color:#0a6644}
+.focus-tag-remove{font-size:15px;color:#5DCAA5;cursor:pointer;line-height:1;padding:0 2px;-webkit-tap-highlight-color:transparent}
+.focus-empty{font-size:12px;color:#ccc}
+.focus-warn{font-size:11px;color:#e67e22;margin-bottom:6px;min-height:16px}
+.focus-clear-btn{display:block;width:100%;padding:8px;border:1.5px solid #f5c4b3;border-radius:10px;background:#fff8f5;color:#c0392b;font-size:13px;font-weight:600;cursor:pointer;text-align:center;-webkit-tap-highlight-color:transparent;margin-top:4px}
+.focus-clear-btn:active{opacity:0.7}
+.focus-clear-btn:disabled{border-color:#e0e0e0;background:#fafafa;color:#ccc;cursor:default}
+.reading-card{background:#fff;border:1px solid #e8e8e8;border-radius:16px;padding:24px 16px;text-align:center;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06)}
+.reading-label{font-size:12px;color:#999;margin-bottom:10px}
+.reading-text{font-size:52px;font-weight:600;color:#1a1a1a;letter-spacing:6px}
+.choices{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px}
+.choice-btn{background:#fff;border:2px solid #e0e0e0;border-radius:14px;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;transition:border-color .15s,background .15s,transform .1s;display:flex;align-items:center;justify-content:center;height:82px;position:relative}
+.choice-btn:active{transform:scale(0.95)}
+.choice-kanji{font-size:36px;line-height:1;color:#1a1a1a}
+.choice-mark{position:absolute;top:6px;right:8px;font-size:12px;font-weight:700}
+.choice-btn.selected{border-color:#1D9E75;background:#f0fdf8}.choice-btn.selected .choice-mark{color:#1D9E75}
+.choice-btn.correct{border-color:#639922;background:#f3fae8}.choice-btn.correct .choice-mark{color:#3B6D11}
+.choice-btn.wrong{border-color:#D85A30;background:#fef5f1}.choice-btn.wrong .choice-kanji{color:#993C1D}.choice-btn.wrong .choice-mark{color:#D85A30}
+.choice-btn.missed{border-color:#BA7517;background:#fffbf0}.choice-btn.missed .choice-kanji{color:#633806}.choice-btn.missed .choice-mark{color:#BA7517}
+.submit-btn{width:100%;padding:15px;border:none;border-radius:12px;background:#1D9E75;color:#fff;font-size:17px;font-weight:600;cursor:pointer;transition:background .15s,transform .1s;-webkit-tap-highlight-color:transparent;margin-bottom:14px}
+.submit-btn:active{transform:scale(0.98)}
+.submit-btn.next{background:#4A90D9}
+.result-box{border-radius:14px;padding:14px;margin-bottom:14px}
+.result-correct{background:#f3fae8;border:1px solid #b8e088}
+.result-wrong{background:#fef5f1;border:1px solid #f8b89a}
+.result-title{font-size:17px;font-weight:700}
+.result-correct .result-title{color:#27500A}
+.result-wrong .result-title{color:#712B13}
+.result-detail-label{font-size:12px;color:#888;margin-top:8px;margin-bottom:4px}
+.tag-row{display:flex;flex-wrap:wrap;gap:6px}
+.tag{padding:4px 12px;border-radius:20px;font-size:15px;font-weight:500}
+.tag-missed{background:#FAEEDA;color:#633806;border:1px solid #FAC775}
+.tag-wrong{background:#FAECE7;color:#712B13;border:1px solid #F5C4B3}
+.finish-card{background:#fff;border:1px solid #e8e8e8;border-radius:16px;padding:28px 20px;text-align:center;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.06)}
+.finish-title{font-size:22px;font-weight:700;color:#1a1a1a;margin-bottom:4px}
+.finish-score{font-size:48px;font-weight:700;color:#1D9E75;margin:12px 0 4px}
+.finish-pct{font-size:18px;color:#555;margin-bottom:20px}
+.restart-btn{width:100%;padding:15px;border:none;border-radius:12px;background:#1D9E75;color:#fff;font-size:17px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.restart-btn:active{transform:scale(0.98)}
+
+/* 苦手 */
+.weak-section{border-top:1px solid #ebebeb;padding-top:14px;margin-top:4px}
+.weak-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.weak-title{font-size:13px;color:#888}
+.weak-clear{font-size:11px;color:#aaa;padding:3px 8px;border:1px solid #e0e0e0;border-radius:6px;background:#fff;cursor:pointer}
+.weak-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:7px}
+.weak-item{border:1px solid #e0e0e0;border-radius:9px;padding:7px 3px;text-align:center;font-size:10px;color:#999;background:#fff}
+.weak-kanji{font-size:22px;display:block;margin-bottom:2px}
+.weak-item.wm{border-color:#5BC8D4;background:#e8f8fa}.weak-item.wm .weak-kanji{color:#0a5a63}
+.weak-item.we{border-color:#F5A0B8;background:#fdf0f5}.weak-item.we .weak-kanji{color:#7a1a38}
+
+/* 記録タブ */
+.record-empty{text-align:center;padding:40px 0;color:#bbb;font-size:14px}
+.record-list{display:flex;flex-direction:column;gap:10px}
+.record-item{background:#fff;border:1px solid #e8e8e8;border-radius:12px;padding:14px 16px}
+.record-date{font-size:11px;color:#bbb;margin-bottom:6px}
+.record-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.record-pct{font-size:28px;font-weight:700;color:#1D9E75}
+.record-count{font-size:13px;color:#888}
+.record-section-label{font-size:11px;color:#aaa;margin-bottom:5px;margin-top:8px}
+.record-readings{display:flex;flex-wrap:wrap;gap:5px}
+.record-reading-tag{padding:3px 10px;border-radius:16px;font-size:13px;background:#e8f8f2;color:#0a6644;border:1px solid #5DCAA5}
+.record-weak-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:5px;margin-top:4px}
+.record-weak-item{border:1px solid #e0e0e0;border-radius:8px;padding:5px 2px;text-align:center;font-size:10px;color:#999}
+.record-weak-kanji{font-size:18px;display:block}
+.record-weak-item.rwm{border-color:#5BC8D4;background:#e8f8fa}.record-weak-item.rwm .record-weak-kanji{color:#0a5a63}
+.record-weak-item.rwe{border-color:#F5A0B8;background:#fdf0f5}.record-weak-item.rwe .record-weak-kanji{color:#7a1a38}
+.record-clear-btn{width:100%;padding:10px;border:1.5px solid #f5c4b3;border-radius:10px;background:#fff8f5;color:#c0392b;font-size:13px;font-weight:600;cursor:pointer;margin-top:4px}
+.record-focus-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
+.record-focus-tag{padding:3px 10px;border-radius:16px;font-size:13px;background:#e8f2fc;color:#1a4a9e;border:1px solid #90b8e8}
+
+.no-data{background:#fff8e1;border:1px solid #ffe082;border-radius:12px;padding:16px;text-align:center;color:#795548;font-size:14px;margin-bottom:16px}
+.loading{text-align:center;padding:60px 0;color:#aaa;font-size:15px}
+/* ポイント表示 */
+.point-disp{display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:#E8A020;background:#fff8e6;border:1px solid #f5d98a;border-radius:20px;padding:3px 10px}
+.point-star{font-size:13px}
+/* 完了画面ポイント */
+.finish-point-box{background:#fff8e6;border:1px solid #f5d98a;border-radius:14px;padding:14px 16px;margin-bottom:14px;text-align:center}
+.finish-point-earned{font-size:13px;color:#b07800;margin-bottom:4px}
+.finish-point-total{font-size:32px;font-weight:700;color:#E8A020}
+.finish-point-label{font-size:12px;color:#b07800;margin-bottom:6px}
+.finish-rank{font-size:15px;font-weight:600;color:#555;margin-top:4px}
+/* 設定ページ ポイントカード */
+.point-reset-btn{width:100%;padding:8px;border:1.5px solid #f5c4b3;border-radius:10px;background:#fff8f5;color:#c0392b;font-size:13px;font-weight:600;cursor:pointer;margin-top:8px;-webkit-tap-highlight-color:transparent}
+.point-reset-btn:active{opacity:0.7}
+.rank-list{display:flex;flex-direction:column;gap:4px;margin-top:8px}
+.rank-row{display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid #f0f0f0;color:#666}
+.rank-row.current{font-weight:700;color:#E8A020}
+
+
+/* 記録サブタブ */
+.record-subtab-bar{display:flex;gap:0;margin-bottom:14px;border-bottom:2px solid #e0e0e0}
+.record-subtab{flex:1;padding:9px 0;font-size:13px;font-weight:500;color:#aaa;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.record-subtab.active{color:#1D9E75;border-bottom-color:#1D9E75;font-weight:700}
+.print-btn{width:100%;padding:12px;border:none;border-radius:10px;background:#4A90D9;color:#fff;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:14px;-webkit-tap-highlight-color:transparent}
+.print-btn:active{opacity:0.8}
+
+/* 印刷プレビューカード */
+.print-card{background:#fff;border:1px solid #d0d0d0;border-radius:8px;padding:10px 10px 8px;font-size:11px;color:#333}
+.print-card-date{font-size:10px;color:#999;margin-bottom:4px}
+.print-card-score{font-size:22px;font-weight:700;color:#1D9E75;line-height:1}
+.print-card-count{font-size:11px;color:#666;margin-bottom:5px}
+.print-card-label{font-size:9px;color:#aaa;margin-bottom:3px;margin-top:5px}
+.print-card-readings{display:flex;flex-wrap:wrap;gap:3px}
+.print-card-reading{padding:1px 6px;border-radius:10px;font-size:10px;background:#e8f8f2;color:#0a6644;border:1px solid #5DCAA5}
+.print-card-focus{padding:1px 6px;border-radius:10px;font-size:10px;background:#e8f2fc;color:#1a4a9e;border:1px solid #90b8e8}
+.print-card-weak-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(32px,1fr));gap:3px}
+.print-card-weak{border:1px solid #e0e0e0;border-radius:5px;padding:3px 2px;text-align:center;font-size:5px;color:#999}
+.print-card-weak-k{font-size:14px;display:block;line-height:1.2}
+.print-card-weak.pwm{border-color:#5BC8D4;background:#e8f8fa}.print-card-weak.pwm .print-card-weak-k{color:#0a5a63}
+.print-card-weak.pwe{border-color:#F5A0B8;background:#fdf0f5}.print-card-weak.pwe .print-card-weak-k{color:#7a1a38}
+
+/* @media print */
+@media print {
+  @page { size: A4 portrait; margin: 10mm; }
+  body { background: #fff !important; }
+  .tab-bar, .page:not(#page-record) { display: none !important; }
+  #page-record { display: block !important; padding: 0 !important; }
+  .record-subtab-bar, .print-btn, #record-list-view,
+  .record-clear-btn, .title { display: none !important; }
+  #record-print-view { display: block !important; }
+  #print-area { display: grid !important; }
+  .print-card { break-inside: avoid; page-break-inside: avoid; }
+}
+
+  @page { size: A4; margin: 15mm; }
+}
+</style>
+</head>
+<body>
+
+<!-- タブバー -->
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('quiz')">クイズ</button>
+  <button class="tab-btn" onclick="switchTab('record')">記録</button>
+  <button class="tab-btn" onclick="switchTab('settings')">設定</button>
+</div>
+
+<!-- クイズページ -->
+<div id="page-quiz" class="page active">
+  <div class="header">
+    <div>
+      <div class="title">音読みクイズ</div>
+      <div style="font-size:11px;color:#bbb;margin-top:1px" id="point-rank-disp"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <div style="font-size:11px;color:#888" id="header-rank-disp"></div>
+      <div class="point-disp"><span class="point-star">⭐</span><span id="point-disp">0 pt</span></div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+        <div style="font-size:11px;color:#bbb" id="session-disp"></div>
+        <div class="score" id="score-disp">0 / 10 問</div>
+      </div>
+    </div>
+  </div>
+  <div class="progress-bar"><div class="progress-fill" id="prog" style="width:0%"></div></div>
+  <div id="quiz-area"></div>
+  <div id="weak-area"></div>
+</div>
+
+<!-- 記録ページ -->
+<div id="page-record" class="page">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <div class="title">学習記録</div>
+    <button class="record-clear-btn" style="width:auto;padding:6px 14px;font-size:12px" onclick="clearRecords()">記録を削除</button>
+  </div>
+  <div class="record-subtab-bar">
+    <button class="record-subtab active" id="subtab-list" onclick="switchRecordTab('list')">一覧</button>
+    <button class="record-subtab" id="subtab-print" onclick="switchRecordTab('print')">印刷プレビュー</button>
+  </div>
+  <div id="record-list-view"><div id="record-list"></div></div>
+  <div id="record-print-view" style="display:none">
+    <button class="print-btn" onclick="window.print()">🖨️ 印刷する</button>
+    <div id="print-area"></div>
+  </div>
+</div>
+
+<!-- 設定ページ -->
+<div id="page-settings" class="page">
+  <div id="settings-area"></div>
+</div>
+
+<script>
+(function(){
+// データは namuminKanji2022.json から読み込む
+const STORAGE_FOCUS = 'onyomi_focus_kanji';
+const STORAGE_POINTS = 'onyomi_total_points';
+const STORAGE_RECORDS = 'onyomi_records';
+
+// ---- タブ切替 ----
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach((b,i) => {
+    const names = ['quiz','record','settings'];
+    b.classList.toggle('active', names[i] === tab);
+  });
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-'+tab).classList.add('active');
+  if (tab === 'record') renderRecordPage();
+  if (tab === 'settings') renderSettingsPage();
+}
+window.switchTab = switchTab;
+
+// ---- データ読み込み ----
+// 新JSON形式: { "よみ": [{k, g}, ...], ... } に対応
+let db = null, idx = null;
+function loadChunk(resolve) {
+  const RAW = globalThis._RAW;
+  db = []; idx = {};
+  const kanjMap = {}; // 漢字文字 → db内インデックス の一時マップ
+  for (const reading of Object.keys(RAW)) {
+    if (!idx[reading]) idx[reading] = [];
+    for (const item of RAW[reading]) {
+      const k = item.k;
+      if (kanjMap[k] === undefined) {
+        db.push({ k: k, r: [reading], g: item.g });
+        kanjMap[k] = db.length - 1;
+      } else {
+        // 同じ漢字が複数の読みに登場する場合、読みを追記
+        if (!db[kanjMap[k]].r.includes(reading)) {
+          db[kanjMap[k]].r.push(reading);
+        }
+      }
+      idx[reading].push(kanjMap[k]);
+    }
+  }
+  resolve();
+}
+
+// ---- 永続データ ----
+function loadFocusFromStorage() {
+  try { const r=localStorage.getItem(STORAGE_FOCUS); return r?JSON.parse(r):[]; } catch(e){return[];}
+}
+function saveFocusToStorage(arr) {
+  try { localStorage.setItem(STORAGE_FOCUS, JSON.stringify(arr)); } catch(e){}
+}
+function loadRecords() {
+  try { const r=localStorage.getItem(STORAGE_RECORDS); return r?JSON.parse(r):[]; } catch(e){return[];}
+}
+function saveRecords(arr) {
+  try { localStorage.setItem(STORAGE_RECORDS, JSON.stringify(arr)); } catch(e){}
+}
+
+// ---- 状態 ----
+let selectedGrades = new Set();
+let focusKanji = loadFocusFromStorage();
+let focusRatio = 'all'; // 重点漢字の出題割合: 'all' | 'half' | 'none'
+
+let targetCount = 10;
+
+// ---- ポイント・レベル ----
+const LEVELS = [
+  {min:0,    label:'📖 見習い'},
+  {min:50,   label:'✏️ 初学者'},
+  {min:150,  label:'📚 学習者'},
+  {min:300,  label:'🌱 努力家'},
+  {min:500,  label:'🔥 読み師'},
+  {min:800,  label:'⭐ 熟練者'},
+  {min:1200, label:'🌟 音読み達人'},
+  {min:2000, label:'🎓 漢字博士'},
+  {min:3500, label:'👑 伝説の士'},
+];
+function getRank(pt){
+  let r=LEVELS[0];
+  for(const lv of LEVELS){ if(pt>=lv.min) r=lv; }
+  return r;
+}
+function getNextRank(pt){
+  for(const lv of LEVELS){ if(pt<lv.min) return lv; }
+  return null;
+}
+function loadPoints(){
+  try{ const v=localStorage.getItem(STORAGE_POINTS); return v?parseInt(v,10):0; }catch(e){return 0;}
+}
+function savePoints(pt){
+  try{ localStorage.setItem(STORAGE_POINTS,String(pt)); }catch(e){}
+}
+let totalPoints = loadPoints();
+let weakMap = {}, score = 0, total = 0;
+let sessionCount = 0;
+let currentQ = null, selected = new Set(), answered = false;
+let quizActive = false;
+let questionQueue = [];
+
+// セッション内の正解した音読みを記録
+let correctReadings = new Set();
+
+function rand(n){return Math.floor(Math.random()*n);}
+function shuffle(a){const b=[...a];for(let i=b.length-1;i>0;i--){const j=rand(i+1);[b[i],b[j]]=[b[j],b[i]];}return b;}
+
+function getFilteredDb(){
+  if(selectedGrades.size===0) return db.filter(e=>e.r.length>0);
+  return db.filter(e=>e.r.length>0&&selectedGrades.has(e.g));
+}
+function countByGrade(g){
+  if(!db) return 0;
+  if(g===0) return db.filter(e=>e.r.length>0).length;
+  return db.filter(e=>e.r.length>0&&e.g===g).length;
+}
+
+// ---- 問題生成 ----
+function buildNormalQuestion(pool){
+  // pool内の音読みインデックス（pool限定）を構築
+  const poolReadingIdx={};
+  for(const i of pool){
+    for(const r of db[i].r){
+      if(!poolReadingIdx[r]) poolReadingIdx[r]=[];
+      poolReadingIdx[r].push(i);
+    }
+  }
+  // 正解が2枚以上になる音読みのみ候補にする
+  const validReadings=Object.keys(poolReadingIdx).filter(r=>poolReadingIdx[r].length>=2);
+  if(!validReadings.length) return null;
+
+  // 試行: 音読みを先に選び、正解漢字を多め(2〜6)に選択肢へ入れる
+  for(let attempt=0;attempt<100;attempt++){
+    const reading=validReadings[rand(validReadings.length)];
+    const correctPool=poolReadingIdx[reading]; // この読みを持つ漢字インデックス
+    // 正解を最大6枚（ただし残りスロットも確保するため最大4枚）からランダムに選ぶ
+    const maxCorrect=Math.min(correctPool.length, 6);
+    const numCorrect=2+rand(maxCorrect-1); // 2〜maxCorrect枚
+    const chosenCorrect=shuffle([...correctPool]).slice(0,numCorrect);
+    // 残りをその読みを持たない漢字で埋める
+    const wrongPool=pool.filter(i=>!db[i].r.includes(reading));
+    if(wrongPool.length<6-numCorrect) continue;
+    const chosenWrong=shuffle(wrongPool).slice(0,6-numCorrect);
+    const choices=shuffle([...chosenCorrect,...chosenWrong]).map(i=>db[i]);
+    const correctSet=new Set(chosenCorrect.map(i=>db[i].k));
+    return{reading,correctSet,choices:choices.map(e=>e.k)};
+  }
+  return null;
+}
+
+function buildFocusQuestion(focusK,pool){
+  const entry=db.find(e=>e.k===focusK);
+  if(!entry||!entry.r.length) return null;
+  // フィルター範囲内の漢字が持つ音読みセットを取得
+  const filteredReadings=new Set(pool.flatMap(i=>db[i].r));
+  // 重点漢字の音読みのうち、フィルター範囲内で出題されている読みを優先
+  const preferredR=entry.r.filter(r=>filteredReadings.has(r));
+  const candidateR=preferredR.length>0?preferredR:entry.r;
+  const reading=candidateR[rand(candidateR.length)];
+  const sameReading=shuffle(pool.filter(i=>db[i].k!==focusK&&db[i].r.includes(reading)));
+  // 同じ読みの漢字を最大2枚まで採用（存在すれば必ず含める）
+  const sameSlots=sameReading.slice(0,Math.min(sameReading.length,2));
+  const usedKeys=new Set([focusK,...sameSlots.map(i=>db[i].k)]);
+  const rest=shuffle(pool.filter(i=>!usedKeys.has(db[i].k))).slice(0,5-sameSlots.length);
+  // フォールバックもpoolの範囲内のみ（フィルター外の学年を混入させない）
+  if(sameSlots.length+rest.length<5) return null;
+  const choices=shuffle([entry,...sameSlots.map(i=>db[i]),...rest.map(i=>db[i])]);
+  const correctSet=new Set(choices.filter(e=>e.r.includes(reading)).map(e=>e.k));
+  return{reading,correctSet,choices:choices.map(e=>e.k)};
+}
+
+function buildQuestionQueue(){
+  const fdb=getFilteredDb();
+  const pool=fdb.map(e=>db.findIndex(d=>d.k===e.k));
+  if(pool.length<6) return[];
+  const n=targetCount;
+  const queue=new Array(n).fill(null);
+  const validFocus=focusKanji.filter(k=>db.find(e=>e.k===k&&e.r.length>0));
+  const maxFocus = focusRatio==='none' ? 0 : focusRatio==='half' ? Math.floor(n/2) : n;
+  const useFocus=validFocus.length<=maxFocus?[...validFocus]:shuffle([...validFocus]).slice(0,maxFocus);
+  const slots=shuffle([...Array(n).keys()]);
+  const focusSlots=slots.slice(0,useFocus.length);
+  for(let i=0;i<useFocus.length;i++){
+    const q=buildFocusQuestion(useFocus[i],pool);
+    queue[focusSlots[i]]=q;
+  }
+  for(let i=0;i<n;i++) if(!queue[i]) queue[i]=buildNormalQuestion(pool);
+  for(let i=0;i<n;i++) if(!queue[i]) queue[i]=buildNormalQuestion(pool)||{reading:'?',correctSet:new Set(),choices:[]};
+  return queue;
+}
+
+// ---- スコア表示 ----
+function updateScoreDisplay(){
+  const sd=document.getElementById('score-disp');
+  if(sd) sd.textContent=`${total} / ${targetCount} 問`;
+  const pg=document.getElementById('prog');
+  if(pg) pg.style.width=Math.round((total/targetCount)*100)+'%';
+  const sc=document.getElementById('session-disp');
+  if(sc) sc.textContent=sessionCount>0?`${sessionCount}回目`:'';
+  const pd=document.getElementById('point-disp');
+  if(pd) pd.textContent=`${totalPoints} pt`;
+  const hr=document.getElementById('header-rank-disp');
+  if(hr) hr.textContent=getRank(totalPoints).label;
+}
+
+// ---- 記録保存 ----
+function saveRecord(){
+  const now=new Date();
+  const dateStr=`${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  const pct=Math.round(score/targetCount*100);
+  const weakEntries=Object.entries(weakMap)
+    .filter(([,v])=>v.missed>0||v.extra>0)
+    .sort((a,b)=>(b[1].missed+b[1].extra)-(a[1].missed+a[1].extra))
+    .map(([k,v])=>({k,missed:v.missed,extra:v.extra}));
+  // セッション中に出題された重点漢字を記録
+  const usedFocus = focusKanji.filter(k => questionQueue.some(q => q && q.choices && q.choices.includes(k)));
+  const record={
+    date: dateStr,
+    score, total: targetCount, pct,
+    readings: [...correctReadings],
+    weak: weakEntries,
+    focus: usedFocus
+  };
+  const records=loadRecords();
+  records.unshift(record); // 新しい順
+  if(records.length>50) records.length=50; // 最大50件
+  saveRecords(records);
+}
+
+// ---- クイズ描画 ----
+function renderQuestion(){
+  // 画面タップオーバーレイを除去
+  const ov=document.getElementById('tap-overlay');
+  if(ov) ov.remove();
+  if(total>=targetCount){renderFinish();return;}
+  quizActive=true;
+  answered=false;selected=new Set();currentQ=questionQueue[total]||null;
+  const qa=document.getElementById('quiz-area');
+  if(!currentQ||!currentQ.choices.length){
+    qa.innerHTML=`<div class="no-data">選択した学年の漢字が少なすぎます。<br>設定から出題範囲を追加してください。</div>`;
+    return;
+  }
+  updateScoreDisplay();
+  qa.innerHTML=`
+    <div class="reading-card">
+      <div class="reading-label">この音読みを持つ漢字をすべて選んでください</div>
+      <div class="reading-text">${currentQ.reading}</div>
+    </div>
+    <div class="choices" id="choices"></div>
+    <button class="submit-btn" id="submit-btn" onclick="submitAnswer()">答え合わせ</button>
+    <div id="result-area"></div>
+  `;
+  const grid=document.getElementById('choices');
+  for(const k of currentQ.choices){
+    const btn=document.createElement('div');
+    btn.className='choice-btn';btn.dataset.k=k;
+    btn.innerHTML=`<span class="choice-kanji">${k}</span><span class="choice-mark" id="m-${k}"></span>`;
+    btn.addEventListener('click',()=>toggleChoice(k,btn));
+    grid.appendChild(btn);
+  }
+}
+
+function renderFinish(){
+  quizActive=false;
+  sessionCount++;
+  saveRecord(); // 記録保存
+  const pct=Math.round(score/targetCount*100);
+  const perfectBonus = (score === targetCount) ? targetCount : 0;
+  const sessionPt = score + perfectBonus;
+  const rank = getRank(totalPoints);
+  const nextRank = getNextRank(totalPoints);
+  const nextMsg = nextRank ? `次の称号まで <b>${nextRank.min - totalPoints}pt</b>` : '最高称号達成！🎉';
+  document.getElementById('quiz-area').innerHTML=`
+    <div class="finish-card">
+      <div class="finish-title">完了！</div>
+      <div class="finish-score">${score}<span style="font-size:24px;color:#aaa"> / ${targetCount}</span></div>
+      <div class="finish-pct">正答率 ${pct}%</div>
+      <div class="finish-point-box">
+        <div class="finish-point-earned">今回獲得 +${sessionPt}pt${perfectBonus > 0 ? `（正解${score}問 + 全問正解ボーナス+${perfectBonus}pt）` : `（正解${score}問）`}</div>
+        <div class="finish-point-total">⭐ ${totalPoints} pt</div>
+        <div class="finish-rank">${rank.label}</div>
+        <div style="font-size:11px;color:#aaa;margin-top:4px">${nextMsg}</div>
+      </div>
+      <button class="restart-btn" onclick="restartQuiz()">もう一度</button>
+    </div>
+  `;
+  document.getElementById('weak-area').innerHTML='';
+  updateScoreDisplay();
+}
+
+window.restartQuiz=function(){
+  score=0;total=0;weakMap={};correctReadings=new Set();
+  questionQueue=buildQuestionQueue();
+  renderQuestion();updateScoreDisplay();
+};
+
+function toggleChoice(k,btn){
+  if(answered)return;
+  if(selected.has(k)){selected.delete(k);btn.classList.remove('selected');document.getElementById('m-'+k).textContent='';}
+  else{selected.add(k);btn.classList.add('selected');document.getElementById('m-'+k).textContent='✓';}
+}
+
+window.submitAnswer=function(){
+  if(answered)return;
+  answered=true;total++;
+  const correct=currentQ.correctSet;
+  const missed=[...correct].filter(k=>!selected.has(k));
+  const extra=[...selected].filter(k=>!correct.has(k));
+  const isOK=missed.length===0&&extra.length===0;
+  if(isOK){score++;correctReadings.add(currentQ.reading);}
+  // ポイント加算（1問=1pt、正解=追加10pt）
+  const earnedPt = isOK ? 1 : 0;
+  totalPoints += earnedPt;
+  savePoints(totalPoints);
+  missed.forEach(k=>{if(!weakMap[k])weakMap[k]={missed:0,extra:0};weakMap[k].missed++;});
+  extra.forEach(k=>{if(!weakMap[k])weakMap[k]={missed:0,extra:0};weakMap[k].extra++;});
+  document.querySelectorAll('.choice-btn').forEach(btn=>{
+    const k=btn.dataset.k;btn.classList.remove('selected');
+    const m=document.getElementById('m-'+k);m.textContent='';
+    if(correct.has(k)&&selected.has(k)){btn.classList.add('correct');m.textContent='✓';}
+    else if(correct.has(k)&&!selected.has(k)){btn.classList.add('missed');m.textContent='△';}
+    else if(!correct.has(k)&&selected.has(k)){btn.classList.add('wrong');m.textContent='✗';}
+  });
+  let html='';
+  if(isOK){
+    html=`<div class="result-box result-correct"><div class="result-title">正解！ <span style="font-size:14px;color:#E8A020">+${earnedPt}pt ⭐</span></div></div>`;
+  } else {
+    let d='';
+    if(missed.length) d+=`<div class="result-detail-label">不足（選ぶべきだった）</div><div class="tag-row">${missed.map(k=>`<span class="tag tag-missed">${k}</span>`).join('')}</div>`;
+    if(extra.length)  d+=`<div class="result-detail-label" style="margin-top:8px">余分（選ぶべきでなかった）</div><div class="tag-row">${extra.map(k=>`<span class="tag tag-wrong">${k}</span>`).join('')}</div>`;
+    html=`<div class="result-box result-wrong"><div class="result-title">不正解</div>${d}</div>`;
+  }
+  document.getElementById('result-area').innerHTML=html;
+  updateScoreDisplay();
+  const sb=document.getElementById('submit-btn');
+  sb.textContent=total<targetCount?'次の問題 →':'結果を見る';
+  sb.classList.add('next');
+  sb.onclick=()=>{renderQuestion();};
+  // 画面全体タップで次へ
+  const overlay=document.createElement('div');
+  overlay.id='tap-overlay';
+  overlay.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;z-index:999;cursor:pointer;-webkit-tap-highlight-color:transparent;';
+  overlay.addEventListener('click',()=>{renderQuestion();});
+  document.body.appendChild(overlay);
+};
+
+// ---- 記録ページ ----
+function renderRecordPage(){
+  const records=loadRecords();
+  const el=document.getElementById('record-list');
+  if(!records.length){
+    el.innerHTML=`<div class="record-empty">まだ記録がありません</div>`;
+    return;
+  }
+  let html='<div class="record-list">';
+  for(const r of records){
+    html+=`<div class="record-item">
+      <div class="record-date">${r.date}</div>
+      <div class="record-row">
+        <div class="record-pct">${r.pct}%</div>
+        <div class="record-count">${r.score} / ${r.total} 問正解</div>
+      </div>`;
+    if(r.focus&&r.focus.length){
+      html+=`<div class="record-section-label">出題された重点漢字</div>
+      <div class="record-focus-row">${r.focus.map(k=>`<span class="record-focus-tag">${k}</span>`).join('')}</div>`;
+    }
+    if(r.readings&&r.readings.length){
+      html+=`<div class="record-section-label">正解した音読み</div>
+      <div class="record-readings">${r.readings.map(rd=>`<span class="record-reading-tag">${rd}</span>`).join('')}</div>`;
+    }
+    if(r.weak&&r.weak.length){
+      html+=`<div class="record-section-label">苦手漢字</div>
+      <div class="record-weak-grid">`;
+      for(const w of r.weak){
+        const cls=w.missed>=w.extra?'rwm':'rwe';
+        const entry=db?db.find(e=>e.k===w.k):null;
+        const rdgs=entry?entry.r.join('・'):'';
+        html+=`<div class="record-weak-item ${cls}"><span class="record-weak-kanji">${w.k}</span><span>${rdgs}</span></div>`;
+      }
+      html+=`</div>`;
+    }
+    html+=`</div>`;
+  }
+  html+='</div>';
+  el.innerHTML=html;
+}
+
+window.clearRecords=function(){
+  if(!confirm('学習記録をすべて削除しますか？')) return;
+  saveRecords([]);
+  renderRecordPage();
+};
+
+// ---- 設定ページ ----
+function renderSettingsPage(){
+  const sa=document.getElementById('settings-area');
+  sa.innerHTML=`
+    <div class="section-card">
+      <div class="section-title">問題数</div>
+      <div class="count-row" id="count-row"></div>
+    </div>
+    <div class="section-card" id="focus-ratio-card">
+      <div class="section-title">重点漢字の出題数</div>
+      <div class="count-row" id="focus-ratio-row"></div>
+    </div>
+    <div class="section-card">
+      <div class="section-title">今週の重点漢字</div>
+      <div class="focus-input-row">
+        <input id="focus-input" class="focus-input" type="text" placeholder="例：学校生活…" maxlength="20" onkeydown="handleFocusKeydown(event)">
+        <button class="focus-add-btn" onclick="handleFocusAdd()">追加</button>
+      </div>
+      <div id="focus-warn" class="focus-warn"></div>
+      <div id="focus-tags" class="focus-tags"></div>
+      <button id="focus-clear-all" class="focus-clear-btn" onclick="clearAllFocus()" ${focusKanji.length===0?'disabled':''}>重点漢字をすべて削除</button>
+    </div>
+    <div class="section-card">
+      <div class="section-title">データのバックアップ・復元</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button class="focus-add-btn" style="width:100%;padding:10px;font-size:13px" onclick="backupData()">💾 バックアップをダウンロード</button>
+        <label style="display:block;width:100%;padding:10px;border-radius:10px;background:#f0f8ff;border:1.5px solid #90b8e8;color:#1a4a9e;font-size:13px;font-weight:600;cursor:pointer;text-align:center">
+          📂 バックアップから復元
+          <input type="file" accept=".json" style="display:none" onchange="restoreData(event)">
+        </label>
+        <div style="font-size:11px;color:#aaa;line-height:1.6">※ バックアップにはポイント・学習記録・重点漢字が含まれます。<br>※ 復元すると現在のデータは上書きされます。</div>
+      </div>
+    </div>
+    <div class="section-card">
+      <div class="section-title">出題範囲（複数選択可）</div>
+      <div class="filter-row" id="filter-row"></div>
+    </div>
+    <div class="section-card">
+      <div class="section-title">ポイント・称号</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div style="font-size:22px;font-weight:700;color:#E8A020">⭐ <span id="settings-point-disp">${totalPoints}</span> pt</div>
+        <div style="font-size:14px;font-weight:600;color:#555" id="settings-rank-disp">${getRank(totalPoints).label}</div>
+      </div>
+      <button class="point-reset-btn" onclick="resetPoints()">ポイントをリセット</button>
+    </div>
+  `;
+  renderCountBtns();
+  renderFilterBtns();
+  renderFocusTags();
+  renderFocusRatioBtns();
+}
+
+function renderFocusRatioBtns(){
+  const row=document.getElementById('focus-ratio-row');if(!row)return;
+  // 重点漢字がなければカードをグレーアウト
+  const card=document.getElementById('focus-ratio-card');
+  if(card) card.style.opacity=focusKanji.length===0?'0.4':'1';
+  row.innerHTML='';
+  const opts=[['all','全部'],['half','半分'],['none','なし']];
+  for(const [val,label] of opts){
+    const btn=document.createElement('button');
+    btn.className='count-btn'+(focusRatio===val?' active':'');
+    btn.textContent=label;
+    btn.onclick=(v=>()=>{
+      if(focusKanji.length===0) return; // 重点漢字がなければ無効
+      focusRatio=v;
+      resetAndRestart();
+      renderFocusRatioBtns();
+    })(val);
+    row.appendChild(btn);
+  }
+}
+
+function renderCountBtns(){
+  const cr=document.getElementById('count-row');if(!cr)return;
+  cr.innerHTML='';
+  for(const n of [10,20,30]){
+    const btn=document.createElement('button');
+    btn.className='count-btn'+(targetCount===n?' active':'');
+    btn.textContent=`${n}問`;
+    btn.onclick=(nn=>()=>{
+      targetCount=nn;score=0;total=0;weakMap={};correctReadings=new Set();quizActive=false;sessionCount=0;
+      questionQueue=buildQuestionQueue();
+      renderCountBtns();updateScoreDisplay();renderQuestion();
+    })(n);
+    cr.appendChild(btn);
+  }
+}
+
+function renderFilterBtns(){
+  const fr=document.getElementById('filter-row');if(!fr)return;
+  fr.innerHTML='';
+  const allActive=selectedGrades.size===0;
+  const allBtn=document.createElement('button');
+  allBtn.className='filter-btn'+(allActive?' active':'');
+  allBtn.innerHTML=`全て<span class="filter-count">${countByGrade(0)}</span>`;
+  allBtn.onclick=()=>{selectedGrades.clear();resetAndRestart();};
+  fr.appendChild(allBtn);
+  for(let g=1;g<=6;g++){
+    const gs=String(g); // JSONのgは文字列なので合わせる
+    const btn=document.createElement('button');
+    btn.className='filter-btn'+(selectedGrades.has(gs)?' active':'');
+    btn.innerHTML=`${g}年<span class="filter-count">${countByGrade(gs)}</span>`;
+    btn.onclick=(gg=>()=>{if(selectedGrades.has(gg))selectedGrades.delete(gg);else selectedGrades.add(gg);resetAndRestart();})(gs);
+    fr.appendChild(btn);
+  }
+  for(const g of['中','高']){
+    const btn=document.createElement('button');
+    btn.className='filter-btn'+(selectedGrades.has(g)?' active':'');
+    btn.innerHTML=`${g}学<span class="filter-count">${countByGrade(g)}</span>`;
+    btn.onclick=(gg=>()=>{if(selectedGrades.has(gg))selectedGrades.delete(gg);else selectedGrades.add(gg);resetAndRestart();})(g);
+    fr.appendChild(btn);
+  }
+}
+
+function resetAndRestart(){
+  score=0;total=0;weakMap={};correctReadings=new Set();quizActive=false;sessionCount=0;
+  questionQueue=buildQuestionQueue();
+  renderFilterBtns();renderQuestion();updateScoreDisplay();
+}
+
+// ---- 重点漢字 ----
+function addFocusKanji(input){
+  const chars=[...input].filter(c=>{const code=c.codePointAt(0);return(code>=0x4E00&&code<=0x9FFF)||(code>=0x3400&&code<=0x4DBF);});
+  const warn=document.getElementById('focus-warn');
+  const notInDb=[];
+  for(const c of chars){
+    if(!focusKanji.includes(c)){
+      const inDb=db.find(e=>e.k===c&&e.r.length>0);
+      if(inDb)focusKanji.push(c);else notInDb.push(c);
+    }
+  }
+  if(warn)warn.textContent=notInDb.length?`「${notInDb.join('・')}」はデータに存在しないか音読みがありません`:'';
+  saveFocusToStorage(focusKanji);renderFocusTags();
+}
+function renderFocusTags(){
+  const container=document.getElementById('focus-tags');if(!container)return;
+  const clearBtn=document.getElementById('focus-clear-all');
+  container.innerHTML=focusKanji.length===0
+    ?'<span class="focus-empty">まだ登録されていません</span>'
+    :focusKanji.map(k=>`<span class="focus-tag">${k}<span class="focus-tag-remove" onclick="removeFocus('${k}')">×</span></span>`).join('');
+  if(clearBtn)clearBtn.disabled=focusKanji.length===0;
+  renderFocusRatioBtns();
+}
+window.removeFocus=k=>{focusKanji=focusKanji.filter(c=>c!==k);saveFocusToStorage(focusKanji);renderFocusTags();};
+window.clearAllFocus=()=>{
+  if(!focusKanji.length)return;
+  if(!confirm('重点漢字をすべて削除しますか？'))return;
+  focusKanji=[];saveFocusToStorage(focusKanji);renderFocusTags();
+};
+window.handleFocusAdd=()=>{
+  const input=document.getElementById('focus-input');
+  if(!input||!input.value.trim())return;
+  addFocusKanji(input.value.trim());input.value='';
+};
+window.handleFocusKeydown=e=>{if(e.key==='Enter')window.handleFocusAdd();};
+
+
+// ---- 苦手記録 ----
+window.clearWeak=function(){weakMap={};const wa=document.getElementById('weak-area');if(wa)wa.innerHTML='';};
+
+function getReadings(k){
+  const entry=db.find(e=>e.k===k);
+  return entry?entry.r.join('・'):'';
+}
+
+function renderWeak(){
+  const entries=Object.entries(weakMap).filter(([,v])=>v.missed>0||v.extra>0);
+  const wa=document.getElementById('weak-area');if(!wa)return;
+  if(!entries.length){wa.innerHTML='';return;}
+  entries.sort((a,b)=>(b[1].missed+b[1].extra)-(a[1].missed+a[1].extra));
+  let html=`<div class="weak-section"><div class="weak-header"><div class="weak-title">苦手記録（${entries.length}文字）</div><button class="weak-clear" onclick="clearWeak()">リセット</button></div><div class="weak-grid">`;
+  for(const [k,v] of entries){
+    const cls=v.missed>=v.extra?'wm':'we';
+    html+=`<div class="weak-item ${cls}"><span class="weak-kanji">${k}</span><span>${getReadings(k)}</span></div>`;
+  }
+  html+='</div></div>';
+  wa.innerHTML=html;
+}
+
+
+// ---- 記録サブタブ ----
+window.switchRecordTab = function(tab) {
+  document.getElementById('subtab-list').classList.toggle('active', tab==='list');
+  document.getElementById('subtab-print').classList.toggle('active', tab==='print');
+  document.getElementById('record-list-view').style.display = tab==='list' ? '' : 'none';
+  document.getElementById('record-print-view').style.display = tab==='print' ? '' : 'none';
+  if (tab === 'print') renderPrintArea();
+};
+
+function renderPrintArea() {
+  const records = loadRecords();
+  const pa = document.getElementById('print-area');
+  if (!pa) return;
+  if (!records.length) {
+    pa.innerHTML = '<div style="text-align:center;color:#bbb;padding:30px">まだ記録がありません</div>';
+    return;
+  }
+  // A4 余白10mm → 印刷幅 ≒ 190mm。2列、1列 ≒ 90mm
+  // gridで2列×7行=14件/ページ
+  pa.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:6px;';
+  let html = '';
+  for (const r of records) {
+    const weakHtml = (r.weak && r.weak.length)
+      ? `<div class="print-card-label">苦手</div><div class="print-card-weak-grid">`
+        + r.weak.map(w => {
+            const cls = w.missed >= w.extra ? 'pwm' : 'pwe';
+            const entry = db ? db.find(e => e.k === w.k) : null;
+            const rdg = entry ? entry.r.join('・') : '';
+            return `<div class="print-card-weak ${cls}"><span class="print-card-weak-k">${w.k}</span><span>${rdg}</span></div>`;
+          }).join('') + '</div>'
+      : '';
+    const readingsHtml = (r.readings && r.readings.length)
+      ? `<div class="print-card-label">正解した音読み</div><div class="print-card-readings">${r.readings.map(rd=>`<span class="print-card-reading">${rd}</span>`).join('')}</div>`
+      : '';
+    const focusHtml = (r.focus && r.focus.length)
+      ? `<div class="print-card-label">出題された重点漢字</div><div class="print-card-readings">${r.focus.map(k=>`<span class="print-card-focus">${k}</span>`).join('')}</div>`
+      : '';
+    html += `<div class="print-card">
+      <div class="print-card-date">${r.date}</div>
+      <div class="print-card-score">${r.pct}%</div>
+      <div class="print-card-count">${r.score} / ${r.total} 問正解</div>
+      ${focusHtml}${readingsHtml}${weakHtml}
+    </div>`;
+  }
+  pa.innerHTML = html;
+}
+
+
+window.backupData = function(){
+  const data = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    points: totalPoints,
+    records: loadRecords(),
+    focus: focusKanji
+  };
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const d = new Date();
+  const dateStr = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  a.href = url; a.download = `onyomi_backup_${dateStr}.json`;
+  a.click(); URL.revokeObjectURL(url);
+};
+
+window.restoreData = function(event){
+  const file = event.target.files[0]; if(!file) return;
+  if(!confirm('現在のデータを上書きして復元しますか？')) { event.target.value=''; return; }
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try {
+      const data = JSON.parse(e.target.result);
+      if(data.version !== 1) throw new Error('形式が異なります');
+      if(typeof data.points === 'number') { totalPoints = data.points; savePoints(totalPoints); }
+      if(Array.isArray(data.records)) saveRecords(data.records);
+      if(Array.isArray(data.focus)) { focusKanji = data.focus; saveFocusToStorage(focusKanji); }
+      alert('復元が完了しました。');
+      renderSettingsPage();
+    } catch(err) {
+      alert('復元に失敗しました。正しいバックアップファイルか確認してください。');
+    }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+};
+
+window.resetPoints = function(){
+  if(!confirm('⚠️ ポイントをリセットします。この操作は元に戻せません。本当によろしいですか？')) return;
+  totalPoints = 0;
+  savePoints(0);
+  renderSettingsPage();
+};
+
+function renderRankList(){
+  const el = document.getElementById('rank-list'); if(!el) return;
+  const cur = getRank(totalPoints);
+  el.innerHTML = LEVELS.map(rk =>
+    `<div class="rank-row${rk.label===cur.label?' current':''}">
+      <span>${rk.label}</span>
+      <span>${rk.min}pt〜</span>
+    </div>`
+  ).join('');
+}
+
+// ---- 起動 ----
+fetch('./OnyomiToKanji2022.json')
+  .then(r => r.json())
+  .then(data => {
+    Object.assign(globalThis, {_RAW: data});
+    new Promise(resolve => loadChunk(resolve)).then(() => {
+      questionQueue = buildQuestionQueue();
+      renderQuestion();
+      updateScoreDisplay();
+    });
+  })
+  .catch(e => {
+    document.getElementById('app').innerHTML =
+      '<div style="padding:40px;text-align:center;color:#c00">データの読み込みに失敗しました。<br>サーバー経由で開いてください。</div>';
+  });
+})();
+
+// ---- Service Worker登録 ----
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .catch(err => console.log('SW登録失敗:', err));
+  });
+}
+</script>
+</body>
+</html>
